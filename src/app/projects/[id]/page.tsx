@@ -1,0 +1,211 @@
+import Link from "next/link";
+import { projects, tasks, assets } from "@/data/mock";
+import { notFound } from "next/navigation";
+
+const statusColor: Record<string, string> = {
+  "pre-production": "bg-sky-100 text-sky-700",
+  production: "bg-amber-100 text-amber-700",
+  "post-production": "bg-violet-100 text-violet-700",
+  delivery: "bg-emerald-100 text-emerald-700",
+  complete: "bg-slate-100 text-slate-600",
+};
+
+const taskStatusStyle: Record<string, string> = {
+  todo: "bg-slate-100 text-slate-600",
+  "in-progress": "bg-blue-100 text-blue-700",
+  review: "bg-amber-100 text-amber-700",
+  done: "bg-emerald-100 text-emerald-700",
+};
+
+const assetStatusStyle: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  "in-review": "bg-amber-100 text-amber-700",
+  approved: "bg-emerald-100 text-emerald-700",
+  final: "bg-brand-100 text-brand-700",
+};
+
+const assetTypeIcon: Record<string, string> = {
+  video: "film",
+  image: "photo",
+  audio: "music",
+  document: "doc",
+};
+
+export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+  const project = projects.find((p) => p.id === params.id);
+  if (!project) return notFound();
+
+  const projectTasks = tasks.filter((t) => t.projectId === project.id);
+  const projectAssets = assets.filter((a) => a.projectId === project.id);
+
+  const phases = ["Pre-Production", "Production", "Post-Production", "Delivery"];
+  const currentPhaseIndex = phases.findIndex(
+    (p) => p.toLowerCase().replace("-", "") === project.status.replace("-", "")
+  );
+
+  return (
+    <div className="p-8">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
+        <Link href="/projects" className="hover:text-brand-600">Projects</Link>
+        <span>/</span>
+        <span className="text-slate-900 font-medium">{project.name}</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-slate-900">{project.name}</h1>
+            <span className={`status-badge ${statusColor[project.status]}`}>
+              {project.status.replace("-", " ")}
+            </span>
+          </div>
+          <p className="text-slate-500">
+            {project.client} &middot; {project.deliverableType} &middot; Due {project.dueDate}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            Edit Project
+          </button>
+          <button className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
+            Share Portal Link
+          </button>
+        </div>
+      </div>
+
+      {/* Phase Timeline */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <h2 className="font-semibold text-slate-900 mb-4">Project Timeline</h2>
+        <div className="flex items-center gap-0">
+          {phases.map((phase, i) => (
+            <div key={phase} className="flex-1 flex items-center">
+              <div className="flex items-center gap-2 flex-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    i <= currentPhaseIndex
+                      ? "bg-brand-600 text-white"
+                      : "bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {i < currentPhaseIndex ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </div>
+                <span className={`text-sm ${i <= currentPhaseIndex ? "text-slate-900 font-medium" : "text-slate-400"}`}>
+                  {phase}
+                </span>
+              </div>
+              {i < phases.length - 1 && (
+                <div className={`flex-shrink-0 w-12 h-0.5 mx-2 ${i < currentPhaseIndex ? "bg-brand-500" : "bg-slate-200"}`} />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-brand-500 rounded-full" style={{ width: `${project.progress}%` }} />
+          </div>
+          <span className="text-sm font-medium text-slate-600">{project.progress}%</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        {/* Tasks */}
+        <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900">Tasks</h2>
+            <button className="text-sm text-brand-600 font-medium hover:text-brand-700">+ Add Task</button>
+          </div>
+          <div className="space-y-2">
+            {projectTasks.length > 0 ? (
+              projectTasks.map((task) => (
+                <div key={task.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors">
+                  <div className={`w-2 h-2 rounded-full ${
+                    task.status === "done" ? "bg-emerald-500" :
+                    task.status === "in-progress" ? "bg-blue-500" :
+                    task.status === "review" ? "bg-amber-500" : "bg-slate-300"
+                  }`} />
+                  <div className="flex-1">
+                    <div className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
+                      {task.title}
+                    </div>
+                    <div className="text-xs text-slate-500">{task.assignee} &middot; {task.phase}</div>
+                  </div>
+                  <span className={`status-badge text-[10px] ${taskStatusStyle[task.status]}`}>
+                    {task.status}
+                  </span>
+                  <span className="text-xs text-slate-400">{task.dueDate}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400 py-8 text-center">No tasks yet. Click &quot;+ Add Task&quot; to get started.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Team & Info */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h2 className="font-semibold text-slate-900 mb-4">Team</h2>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-medium text-brand-700">
+                  {project.producer.split(" ").map((n) => n[0]).join("")}
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-900">{project.producer}</div>
+                  <div className="text-xs text-slate-500">Producer</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-xs font-medium text-violet-700">
+                  {project.editor !== "Unassigned"
+                    ? project.editor.split(" ").map((n) => n[0]).join("")
+                    : "?"}
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-900">{project.editor}</div>
+                  <div className="text-xs text-slate-500">Editor</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Assets */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-slate-900">Assets</h2>
+              <span className="text-xs text-slate-400">{projectAssets.length} files</span>
+            </div>
+            <div className="space-y-2">
+              {projectAssets.map((asset) => (
+                <Link
+                  key={asset.id}
+                  href={asset.type === "video" ? `/review/${asset.id}` : "#"}
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs text-slate-400 font-medium">
+                    {asset.type === "video" ? "MP4" : asset.type === "document" ? "PDF" : asset.type.toUpperCase().slice(0, 3)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-900 truncate">{asset.name}</div>
+                    <div className="text-[10px] text-slate-500">v{asset.version} &middot; {asset.size}</div>
+                  </div>
+                  <span className={`status-badge text-[10px] ${assetStatusStyle[asset.status]}`}>
+                    {asset.status}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
