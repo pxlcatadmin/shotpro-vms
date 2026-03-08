@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { projects, tasks, assets } from "@/data/mock";
+import { projects as mockProjects, tasks as mockTasks, assets as mockAssets } from "@/data/mock";
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 const statusColor: Record<string, string> = {
   "pre-production": "bg-sky-100 text-sky-700",
@@ -24,19 +25,79 @@ const assetStatusStyle: Record<string, string> = {
   final: "bg-brand-100 text-brand-700",
 };
 
-const assetTypeIcon: Record<string, string> = {
-  video: "film",
-  image: "photo",
-  audio: "music",
-  document: "doc",
-};
+export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
+  const supabase = createClient();
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
-  const project = projects.find((p) => p.id === params.id);
-  if (!project) return notFound();
+  // Try Supabase first
+  let project: any = null;
+  let projectTasks: any[] = [];
+  let projectAssets: any[] = [];
+  let usingDb = false;
 
-  const projectTasks = tasks.filter((t) => t.projectId === project.id);
-  const projectAssets = assets.filter((a) => a.projectId === project.id);
+  // Check if it's a UUID (Supabase) or mock ID (p1, p2, etc.)
+  const isUuid = params.id.length > 10;
+
+  if (isUuid) {
+    const { data: dbProject } = await supabase
+      .from("projects")
+      .select("*, producer:profiles!producer_id(full_name), editor:profiles!editor_id(full_name)")
+      .eq("id", params.id)
+      .single();
+
+    if (dbProject) {
+      project = {
+        id: dbProject.id,
+        name: dbProject.name,
+        client: dbProject.client,
+        status: dbProject.status,
+        dueDate: dbProject.due_date,
+        progress: dbProject.progress,
+        producer: dbProject.producer?.full_name || "Unassigned",
+        editor: dbProject.editor?.full_name || "Unassigned",
+        deliverableType: dbProject.deliverable_type,
+      };
+      usingDb = true;
+
+      const { data: dbTasks } = await supabase
+        .from("tasks")
+        .select("*, assignee:profiles!assignee_id(full_name)")
+        .eq("project_id", params.id)
+        .order("due_date");
+
+      projectTasks = (dbTasks || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        assignee: t.assignee?.full_name || "Unassigned",
+        status: t.status,
+        dueDate: t.due_date,
+        phase: t.phase,
+      }));
+
+      const { data: dbAssets } = await supabase
+        .from("assets")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false });
+
+      projectAssets = (dbAssets || []).map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        size: formatBytes(a.size_bytes),
+        version: a.version,
+        status: a.status,
+      }));
+    }
+  }
+
+  // Fallback to mock
+  if (!project) {
+    const mockProject = mockProjects.find((p) => p.id === params.id);
+    if (!mockProject) return notFound();
+    project = mockProject;
+    projectTasks = mockTasks.filter((t) => t.projectId === params.id);
+    projectAssets = mockAssets.filter((a) => a.projectId === params.id);
+  }
 
   const phases = ["Pre-Production", "Production", "Post-Production", "Delivery"];
   const currentPhaseIndex = phases.findIndex(
@@ -57,7 +118,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold text-slate-900">{project.name}</h1>
-            <span className={`status-badge ${statusColor[project.status]}`}>
+            <span className={`status-badge ${statusColor[project.status] || ""}`}>
               {project.status.replace("-", " ")}
             </span>
           </div>
@@ -124,7 +185,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
           </div>
           <div className="space-y-2">
             {projectTasks.length > 0 ? (
-              projectTasks.map((task) => (
+              projectTasks.map((task: any) => (
                 <div key={task.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className={`w-2 h-2 rounded-full ${
                     task.status === "done" ? "bg-emerald-500" :
@@ -137,7 +198,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     </div>
                     <div className="text-xs text-slate-500">{task.assignee} &middot; {task.phase}</div>
                   </div>
-                  <span className={`status-badge text-[10px] ${taskStatusStyle[task.status]}`}>
+                  <span className={`status-badge text-[10px] ${taskStatusStyle[task.status] || ""}`}>
                     {task.status}
                   </span>
                   <span className="text-xs text-slate-400">{task.dueDate}</span>
@@ -156,7 +217,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-medium text-brand-700">
-                  {project.producer.split(" ").map((n) => n[0]).join("")}
+                  {project.producer.split(" ").map((n: string) => n[0]).join("")}
                 </div>
                 <div>
                   <div className="text-sm font-medium text-slate-900">{project.producer}</div>
@@ -166,7 +227,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-xs font-medium text-violet-700">
                   {project.editor !== "Unassigned"
-                    ? project.editor.split(" ").map((n) => n[0]).join("")
+                    ? project.editor.split(" ").map((n: string) => n[0]).join("")
                     : "?"}
                 </div>
                 <div>
@@ -184,20 +245,20 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <span className="text-xs text-slate-400">{projectAssets.length} files</span>
             </div>
             <div className="space-y-2">
-              {projectAssets.map((asset) => (
+              {projectAssets.map((asset: any) => (
                 <Link
                   key={asset.id}
                   href={asset.type === "video" ? `/review/${asset.id}` : "#"}
                   className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                   <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs text-slate-400 font-medium">
-                    {asset.type === "video" ? "MP4" : asset.type === "document" ? "PDF" : asset.type.toUpperCase().slice(0, 3)}
+                    {asset.type === "video" ? "MP4" : asset.type === "document" ? "PDF" : (asset.type || "").toUpperCase().slice(0, 3)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium text-slate-900 truncate">{asset.name}</div>
                     <div className="text-[10px] text-slate-500">v{asset.version} &middot; {asset.size}</div>
                   </div>
-                  <span className={`status-badge text-[10px] ${assetStatusStyle[asset.status]}`}>
+                  <span className={`status-badge text-[10px] ${assetStatusStyle[asset.status] || ""}`}>
                     {asset.status}
                   </span>
                 </Link>
@@ -208,4 +269,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }

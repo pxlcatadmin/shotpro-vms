@@ -1,12 +1,6 @@
 import Link from "next/link";
-import { stats, projects, tasks } from "@/data/mock";
-
-const statCards = [
-  { label: "Active Projects", value: stats.activeProjects, color: "bg-brand-600", href: "/projects" },
-  { label: "Pending Reviews", value: stats.pendingReviews, color: "bg-amber-500", href: "/assets" },
-  { label: "Pipeline Value", value: `$${(stats.pipelineValue / 1000).toFixed(0)}k`, color: "bg-emerald-600", href: "/pipeline" },
-  { label: "On-Time Delivery", value: `${stats.onTimeDelivery}%`, color: "bg-violet-600", href: "/projects" },
-];
+import { stats as mockStats, projects as mockProjects, tasks as mockTasks } from "@/data/mock";
+import { createClient } from "@/lib/supabase/server";
 
 const statusColor: Record<string, string> = {
   "pre-production": "bg-sky-100 text-sky-700",
@@ -23,19 +17,88 @@ const taskStatusIcon: Record<string, string> = {
   done: "bg-emerald-500",
 };
 
-export default function Dashboard() {
-  const activeProjects = projects.filter((p) => p.status !== "complete");
-  const upcomingTasks = tasks
-    .filter((t) => t.status !== "done")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 5);
+export default async function Dashboard() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Try loading from Supabase
+  let projects: any[] = [];
+  let tasks: any[] = [];
+  let usingDb = false;
+
+  const { data: dbProjects } = await supabase
+    .from("projects")
+    .select("*, producer:profiles!producer_id(full_name), editor:profiles!editor_id(full_name)")
+    .neq("status", "complete")
+    .order("due_date");
+
+  if (dbProjects && dbProjects.length > 0) {
+    projects = dbProjects.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      client: p.client,
+      status: p.status,
+      dueDate: p.due_date,
+      progress: p.progress,
+      producer: p.producer?.full_name || "Unassigned",
+      editor: p.editor?.full_name || "Unassigned",
+      deliverableType: p.deliverable_type,
+    }));
+    usingDb = true;
+
+    const { data: dbTasks } = await supabase
+      .from("tasks")
+      .select("*, assignee:profiles!assignee_id(full_name)")
+      .neq("status", "done")
+      .order("due_date")
+      .limit(5);
+
+    tasks = (dbTasks || []).map((t: any) => ({
+      id: t.id,
+      projectId: t.project_id,
+      title: t.title,
+      assignee: t.assignee?.full_name || "Unassigned",
+      status: t.status,
+      dueDate: t.due_date,
+      phase: t.phase,
+    }));
+  } else {
+    projects = mockProjects.filter((p) => p.status !== "complete");
+    tasks = mockTasks.filter((t) => t.status !== "done").sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
+  }
+
+  // Compute stats
+  const { data: dbAssets } = usingDb
+    ? await supabase.from("assets").select("status").eq("status", "in-review")
+    : { data: null };
+
+  const stats = usingDb
+    ? {
+        activeProjects: projects.length,
+        pendingReviews: dbAssets?.length || 0,
+        pipelineValue: mockStats.pipelineValue,
+        onTimeDelivery: mockStats.onTimeDelivery,
+      }
+    : mockStats;
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
+
+  const statCards = [
+    { label: "Active Projects", value: stats.activeProjects, color: "bg-brand-600", href: "/projects" },
+    { label: "Pending Reviews", value: stats.pendingReviews, color: "bg-amber-500", href: "/assets" },
+    { label: "Pipeline Value", value: `$${(stats.pipelineValue / 1000).toFixed(0)}k`, color: "bg-emerald-600", href: "/pipeline" },
+    { label: "On-Time Delivery", value: `${stats.onTimeDelivery}%`, color: "bg-violet-600", href: "/projects" },
+  ];
 
   return (
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-1">Welcome back, Alex. Here&apos;s what&apos;s happening today.</p>
+        <p className="text-slate-500 mt-1">
+          Welcome back, {userName}. Here&apos;s what&apos;s happening today.
+          {!usingDb && <span className="text-xs ml-2 text-amber-500">(demo data)</span>}
+        </p>
       </div>
 
       {/* Stat Cards */}
@@ -65,7 +128,7 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="space-y-3">
-            {activeProjects.map((project) => (
+            {projects.map((project: any) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
@@ -79,7 +142,7 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm text-slate-900 truncate">{project.name}</span>
-                    <span className={`status-badge ${statusColor[project.status]}`}>
+                    <span className={`status-badge ${statusColor[project.status] || ""}`}>
                       {project.status.replace("-", " ")}
                     </span>
                   </div>
@@ -103,9 +166,9 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="font-semibold text-slate-900 mb-5">Upcoming Tasks</h2>
           <div className="space-y-3">
-            {upcomingTasks.map((task) => (
+            {tasks.map((task: any) => (
               <div key={task.id} className="flex items-start gap-3 p-2">
-                <div className={`w-2 h-2 rounded-full mt-1.5 ${taskStatusIcon[task.status]}`} />
+                <div className={`w-2 h-2 rounded-full mt-1.5 ${taskStatusIcon[task.status] || "bg-slate-200"}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-900 truncate">{task.title}</div>
                   <div className="text-xs text-slate-500 mt-0.5">
@@ -123,7 +186,7 @@ export default function Dashboard() {
         {[
           { label: "New Project", href: "/projects", icon: "+" },
           { label: "Upload Asset", href: "/assets", icon: "^" },
-          { label: "Start Review", href: "/review/a1", icon: ">" },
+          { label: "Start Review", href: "/assets", icon: ">" },
           { label: "View Pipeline", href: "/pipeline", icon: "$" },
         ].map((action) => (
           <Link

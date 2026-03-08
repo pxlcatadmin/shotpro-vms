@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+interface UserProfile {
+  id: string;
+  full_name: string | null;
+  role: string | null;
+  avatar_url: string | null;
+  email: string | null;
+}
 
 const nav = [
   { label: "Dashboard", href: "/", icon: "grid" },
@@ -39,8 +48,20 @@ const icons: Record<string, JSX.Element> = {
   ),
 };
 
-export default function Sidebar() {
+export default function Sidebar({ user }: { user: UserProfile }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
+
+  const initials = user.full_name
+    ? user.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "U";
 
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-64 bg-slate-900 text-white flex flex-col z-50">
@@ -82,12 +103,21 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-700/50">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-xs font-medium">
-            AR
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">Alex Rivera</div>
-            <div className="text-xs text-slate-400">Producer</div>
+            <div className="text-sm font-medium truncate">{user.full_name || "User"}</div>
+            <div className="text-xs text-slate-400">{user.role || "Member"}</div>
           </div>
+          <button
+            onClick={handleSignOut}
+            className="text-slate-400 hover:text-white transition-colors"
+            title="Sign out"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
