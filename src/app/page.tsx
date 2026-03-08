@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { stats as mockStats, projects as mockProjects, tasks as mockTasks } from "@/data/mock";
 import { createClient } from "@/lib/supabase/server";
 
 const statusColor: Record<string, string> = {
@@ -21,73 +20,54 @@ export default async function Dashboard() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Try loading from Supabase
-  let projects: any[] = [];
-  let tasks: any[] = [];
-  let usingDb = false;
-
   const { data: dbProjects } = await supabase
     .from("projects")
     .select("*, producer:profiles!producer_id(full_name), editor:profiles!editor_id(full_name)")
     .neq("status", "complete")
     .order("due_date");
 
-  if (dbProjects && dbProjects.length > 0) {
-    projects = dbProjects.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      client: p.client,
-      status: p.status,
-      dueDate: p.due_date,
-      progress: p.progress,
-      producer: p.producer?.full_name || "Unassigned",
-      editor: p.editor?.full_name || "Unassigned",
-      deliverableType: p.deliverable_type,
-    }));
-    usingDb = true;
+  const projects = (dbProjects || []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    client: p.client,
+    status: p.status,
+    dueDate: p.due_date,
+    progress: p.progress,
+    producer: p.producer?.full_name || "Unassigned",
+    editor: p.editor?.full_name || "Unassigned",
+    deliverableType: p.deliverable_type,
+  }));
 
-    const { data: dbTasks } = await supabase
-      .from("tasks")
-      .select("*, assignee:profiles!assignee_id(full_name)")
-      .neq("status", "done")
-      .order("due_date")
-      .limit(5);
+  const { data: dbTasks } = await supabase
+    .from("tasks")
+    .select("*, assignee:profiles!assignee_id(full_name)")
+    .neq("status", "done")
+    .order("due_date")
+    .limit(5);
 
-    tasks = (dbTasks || []).map((t: any) => ({
-      id: t.id,
-      projectId: t.project_id,
-      title: t.title,
-      assignee: t.assignee?.full_name || "Unassigned",
-      status: t.status,
-      dueDate: t.due_date,
-      phase: t.phase,
-    }));
-  } else {
-    projects = mockProjects.filter((p) => p.status !== "complete");
-    tasks = mockTasks.filter((t) => t.status !== "done").sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
-  }
+  const tasks = (dbTasks || []).map((t: any) => ({
+    id: t.id,
+    projectId: t.project_id,
+    title: t.title,
+    assignee: t.assignee?.full_name || "Unassigned",
+    status: t.status,
+    dueDate: t.due_date,
+    phase: t.phase,
+  }));
 
-  // Compute stats
-  const { data: dbAssets } = usingDb
-    ? await supabase.from("assets").select("status").eq("status", "in-review")
-    : { data: null };
+  const { data: pendingAssets } = await supabase.from("assets").select("id").eq("status", "in-review");
+  const { data: allActiveProjects } = await supabase.from("projects").select("id").neq("status", "complete");
 
-  const stats = usingDb
-    ? {
-        activeProjects: projects.length,
-        pendingReviews: dbAssets?.length || 0,
-        pipelineValue: mockStats.pipelineValue,
-        onTimeDelivery: mockStats.onTimeDelivery,
-      }
-    : mockStats;
+  const stats = {
+    activeProjects: allActiveProjects?.length || 0,
+    pendingReviews: pendingAssets?.length || 0,
+  };
 
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
 
   const statCards = [
     { label: "Active Projects", value: stats.activeProjects, color: "bg-brand-600", href: "/projects" },
     { label: "Pending Reviews", value: stats.pendingReviews, color: "bg-amber-500", href: "/assets" },
-    { label: "Pipeline Value", value: `$${(stats.pipelineValue / 1000).toFixed(0)}k`, color: "bg-emerald-600", href: "/pipeline" },
-    { label: "On-Time Delivery", value: `${stats.onTimeDelivery}%`, color: "bg-violet-600", href: "/projects" },
   ];
 
   return (
@@ -97,12 +77,11 @@ export default async function Dashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-500 mt-1">
           Welcome back, {userName}. Here&apos;s what&apos;s happening today.
-          {!usingDb && <span className="text-xs ml-2 text-amber-500">(demo data)</span>}
         </p>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 gap-5 mb-8">
         {statCards.map((s) => (
           <Link
             key={s.label}
@@ -127,67 +106,84 @@ export default async function Dashboard() {
               View all
             </Link>
           </div>
-          <div className="space-y-3">
-            {projects.map((project: any) => (
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-slate-900 truncate">{project.name}</span>
-                    <span className={`status-badge ${statusColor[project.status] || ""}`}>
-                      {project.status.replace("-", " ")}
-                    </span>
+          {projects.length > 0 ? (
+            <div className="space-y-3">
+              {projects.map((project: any) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">{project.client} &middot; Due {project.dueDate}</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-brand-500 rounded-full transition-all"
-                      style={{ width: `${project.progress}%` }}
-                    />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm text-slate-900 truncate">{project.name}</span>
+                      <span className={`status-badge ${statusColor[project.status] || ""}`}>
+                        {project.status.replace("-", " ")}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">{project.client} &middot; Due {project.dueDate}</div>
                   </div>
-                  <span className="text-xs text-slate-500 w-8 text-right">{project.progress}%</span>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-brand-500 rounded-full transition-all"
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-500 w-8 text-right">{project.progress}%</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                <path strokeLinecap="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              <p className="text-sm text-slate-400 mb-3">No projects yet</p>
+              <Link href="/projects/new" className="text-sm text-brand-600 font-medium hover:text-brand-700">
+                Create your first project &rarr;
               </Link>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Upcoming Tasks */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="font-semibold text-slate-900 mb-5">Upcoming Tasks</h2>
-          <div className="space-y-3">
-            {tasks.map((task: any) => (
-              <div key={task.id} className="flex items-start gap-3 p-2">
-                <div className={`w-2 h-2 rounded-full mt-1.5 ${taskStatusIcon[task.status] || "bg-slate-200"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-900 truncate">{task.title}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {task.assignee} &middot; {task.dueDate}
+          {tasks.length > 0 ? (
+            <div className="space-y-3">
+              {tasks.map((task: any) => (
+                <div key={task.id} className="flex items-start gap-3 p-2">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 ${taskStatusIcon[task.status] || "bg-slate-200"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900 truncate">{task.title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {task.assignee} &middot; {task.dueDate}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-sm text-slate-400">No upcoming tasks</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="mt-6 grid grid-cols-4 gap-4">
+      <div className="mt-6 grid grid-cols-3 gap-4">
         {[
-          { label: "New Project", href: "/projects", icon: "+" },
+          { label: "New Project", href: "/projects/new", icon: "+" },
           { label: "Upload Asset", href: "/assets", icon: "^" },
           { label: "Start Review", href: "/assets", icon: ">" },
-          { label: "View Pipeline", href: "/pipeline", icon: "$" },
         ].map((action) => (
           <Link
             key={action.label}

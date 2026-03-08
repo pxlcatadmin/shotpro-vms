@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { assets as mockAssets, projects as mockProjects } from "@/data/mock";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import UploadModal from "@/components/UploadModal";
@@ -54,16 +53,15 @@ export default function AssetsPage() {
   const [filter, setFilter] = useState<"all" | "video" | "image" | "audio" | "document">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showUpload, setShowUpload] = useState(false);
-  const [dbAssets, setDbAssets] = useState<DBAsset[]>([]);
+  const [assets, setAssets] = useState<DBAsset[]>([]);
   const [dbProjects, setDbProjects] = useState<{ id: string; name: string }[]>([]);
-  const [usingDb, setUsingDb] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
-  // Try to load from Supabase; fallback to mock
   useEffect(() => {
-    async function loadFromDb() {
+    async function loadData() {
       const supabase = createClient();
-      const { data: assets, error } = await supabase
+      const { data: assetData } = await supabase
         .from("assets")
         .select(`
           *,
@@ -72,33 +70,26 @@ export default function AssetsPage() {
         `)
         .order("created_at", { ascending: false });
 
-      if (!error && assets && assets.length > 0) {
-        setDbAssets(assets as unknown as DBAsset[]);
-        setUsingDb(true);
+      if (assetData) {
+        setAssets(assetData as unknown as DBAsset[]);
       }
 
-      // Load projects for the upload modal
       const { data: projects } = await supabase
         .from("projects")
         .select("id, name")
         .order("name");
       if (projects) setDbProjects(projects);
+
+      setLoading(false);
     }
-    loadFromDb();
+    loadData();
   }, []);
 
-  // If using mock data
-  const filtered = usingDb
-    ? dbAssets.filter((a) => {
-        if (filter !== "all" && a.type !== filter) return false;
-        if (statusFilter !== "all" && a.status !== statusFilter) return false;
-        return true;
-      })
-    : mockAssets.filter((a) => {
-        if (filter !== "all" && a.type !== filter) return false;
-        if (statusFilter !== "all" && a.status !== statusFilter) return false;
-        return true;
-      });
+  const filtered = assets.filter((a) => {
+    if (filter !== "all" && a.type !== filter) return false;
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    return true;
+  });
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -112,8 +103,7 @@ export default function AssetsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Asset Library</h1>
           <p className="text-slate-500 mt-1">
-            {usingDb ? dbAssets.length : mockAssets.length} files
-            {!usingDb && " (demo data)"}
+            {loading ? "Loading..." : `${assets.length} files`}
           </p>
         </div>
         <button
@@ -172,70 +162,55 @@ export default function AssetsPage() {
             </tr>
           </thead>
           <tbody>
-            {usingDb
-              ? (filtered as DBAsset[]).map((asset) => (
-                  <tr key={asset.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
-                          {typeIcons[asset.type] || typeIcons.document}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-slate-900">{asset.name}</div>
-                          <div className="text-xs text-slate-500">{asset.uploader?.full_name || "—"}</div>
-                        </div>
+            {filtered.length > 0 ? (
+              filtered.map((asset) => (
+                <tr key={asset.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                        {typeIcons[asset.type] || typeIcons.document}
                       </div>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{asset.project?.name || "—"}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">v{asset.version}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{formatSize(asset.size_bytes)}</td>
-                    <td className="px-5 py-3">
-                      <span className={`status-badge ${assetStatusStyle[asset.status] || ""}`}>{asset.status}</span>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-slate-500">
-                      {new Date(asset.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-5 py-3">
-                      {asset.type === "video" && (
-                        <Link href={`/review/${asset.id}`} className="text-xs text-brand-600 font-medium hover:text-brand-700">
-                          Review
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              : (filtered as typeof mockAssets).map((asset) => {
-                  const project = mockProjects.find((p) => p.id === asset.projectId);
-                  return (
-                    <tr key={asset.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
-                            {typeIcons[asset.type]}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-slate-900">{asset.name}</div>
-                            <div className="text-xs text-slate-500">{asset.uploadedBy}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">{project?.name || "—"}</td>
-                      <td className="px-5 py-3 text-sm text-slate-600">v{asset.version}</td>
-                      <td className="px-5 py-3 text-sm text-slate-600">{asset.size}</td>
-                      <td className="px-5 py-3">
-                        <span className={`status-badge ${assetStatusStyle[asset.status]}`}>{asset.status}</span>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-500">{asset.uploadedAt}</td>
-                      <td className="px-5 py-3">
-                        {asset.type === "video" && (
-                          <Link href={`/review/${asset.id}`} className="text-xs text-brand-600 font-medium hover:text-brand-700">
-                            Review
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">{asset.name}</div>
+                        <div className="text-xs text-slate-500">{asset.uploader?.full_name || "—"}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{asset.project?.name || "—"}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">v{asset.version}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatSize(asset.size_bytes)}</td>
+                  <td className="px-5 py-3">
+                    <span className={`status-badge ${assetStatusStyle[asset.status] || ""}`}>{asset.status}</span>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-slate-500">
+                    {new Date(asset.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-5 py-3">
+                    {asset.type === "video" && (
+                      <Link href={`/review/${asset.id}`} className="text-xs text-brand-600 font-medium hover:text-brand-700">
+                        Review
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} className="px-5 py-16 text-center">
+                  {loading ? (
+                    <p className="text-sm text-slate-400">Loading assets...</p>
+                  ) : (
+                    <>
+                      <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                      <p className="text-sm text-slate-400 mb-2">No assets yet</p>
+                      <p className="text-xs text-slate-400">Upload your first file to get started</p>
+                    </>
+                  )}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -283,13 +258,19 @@ export default function AssetsPage() {
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 text-center" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-lg font-semibold text-slate-900 mb-2">No Projects Yet</h2>
                 <p className="text-sm text-slate-500 mb-4">
-                  Create a project first before uploading assets. Make sure the database migration has been run.
+                  You need to create a project before uploading assets.
                 </p>
+                <Link
+                  href="/projects/new"
+                  className="inline-block bg-brand-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+                >
+                  Create Project
+                </Link>
                 <button
                   onClick={() => setShowUpload(false)}
-                  className="bg-brand-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+                  className="block mx-auto mt-3 text-sm text-slate-500 hover:text-slate-700"
                 >
-                  Got it
+                  Cancel
                 </button>
               </div>
             </div>
