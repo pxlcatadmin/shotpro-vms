@@ -42,7 +42,7 @@ export function useRealtimeComments(assetId: string) {
         .order("created_at", { ascending: true });
 
       if (!error && data) {
-        setComments(data as ReviewComment[]);
+        setComments(data as unknown as ReviewComment[]);
       }
       setLoading(false);
     }
@@ -75,7 +75,7 @@ export function useRealtimeComments(assetId: string) {
               .single();
 
             if (data) {
-              setComments((prev) => [...prev, data as ReviewComment]);
+              setComments((prev) => [...prev, data as unknown as ReviewComment]);
             }
           } else if (payload.eventType === "UPDATE") {
             setComments((prev) =>

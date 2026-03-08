@@ -73,7 +73,7 @@ export default function AssetsPage() {
         .order("created_at", { ascending: false });
 
       if (!error && assets && assets.length > 0) {
-        setDbAssets(assets as DBAsset[]);
+        setDbAssets(assets as unknown as DBAsset[]);
         setUsingDb(true);
       }
 

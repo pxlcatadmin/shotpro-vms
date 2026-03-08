@@ -13,7 +13,7 @@ interface PortalComment {
   author?: {
     full_name: string;
     role: string;
-  };
+  } | null;
 }
 
 interface PortalClientProps {
@@ -50,7 +50,7 @@ export default function PortalClient({ asset, projectName, clientName, videoUrl,
         .eq("asset_id", asset.id)
         .order("created_at", { ascending: true });
 
-      if (data) setComments(data as PortalComment[]);
+      if (data) setComments(data as unknown as PortalComment[]);
       setLoading(false);
     }
     fetchComments();
