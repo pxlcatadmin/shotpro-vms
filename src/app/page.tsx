@@ -184,7 +184,7 @@ export default async function Dashboard() {
       {/* Quick Actions */}
       <div className="mt-6 grid grid-cols-4 gap-4">
         {[
-          { label: "New Project", href: "/projects", icon: "+" },
+          { label: "New Project", href: "/projects/new", icon: "+" },
           { label: "Upload Asset", href: "/assets", icon: "^" },
           { label: "Start Review", href: "/assets", icon: ">" },
           { label: "View Pipeline", href: "/pipeline", icon: "$" },
