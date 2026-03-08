@@ -285,20 +285,12 @@ export default function AssetsPage() {
                 <p className="text-sm text-slate-500 mb-4">
                   Create a project first before uploading assets. Make sure the database migration has been run.
                 </p>
-                <div className="flex items-center justify-center gap-3 mt-4">
-                  <Link
-                    href="/projects/new"
-                    className="bg-brand-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
-                  >
-                    Create Project
-                  </Link>
-                  <button
-                    onClick={() => setShowUpload(false)}
-                    className="text-sm text-slate-500 hover:text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowUpload(false)}
+                  className="bg-brand-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+                >
+                  Got it
+                </button>
               </div>
             </div>
           )}

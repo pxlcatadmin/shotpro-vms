@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 interface UploadModalProps {
   projectId: string;
@@ -36,43 +37,82 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
     }
   };
 
+  const getFileType = (fileName: string): "video" | "image" | "audio" | "document" => {
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    if (["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(ext)) return "video";
+    if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff"].includes(ext)) return "image";
+    if (["mp3", "wav", "aac", "flac", "ogg", "m4a"].includes(ext)) return "audio";
+    return "document";
+  };
+
   const handleUpload = async () => {
     if (!file) return;
+
+    const supabase = createClient();
     setUploading(true);
     setError(null);
     setProgress(10);
 
+    let storagePath = "";
+
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("project_id", projectId);
-      formData.append("name", name);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      setProgress(30);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      setProgress(80);
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Upload failed");
+      if (userError || !user) {
+        throw new Error("You need to be logged in to upload files");
       }
 
-      const { asset } = await res.json();
+      setProgress(20);
+
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      storagePath = `${projectId}/${Date.now()}_${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("assets")
+        .upload(storagePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type || undefined,
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      setProgress(75);
+
+      const { data: asset, error: dbError } = await supabase
+        .from("assets")
+        .insert({
+          project_id: projectId,
+          name: name || file.name,
+          type: getFileType(file.name),
+          size_bytes: file.size,
+          storage_path: storagePath,
+          uploaded_by: user.id,
+          version: 1,
+          status: "draft",
+        })
+        .select("id")
+        .single();
+
+      if (dbError || !asset) {
+        await supabase.storage.from("assets").remove([storagePath]);
+        throw new Error(dbError?.message || "Failed to create asset record");
+      }
+
       setProgress(100);
 
-      // Navigate to the review page for the uploaded asset
       setTimeout(() => {
         router.push(`/review/${asset.id}`);
         router.refresh();
         onClose();
-      }, 500);
+      }, 400);
     } catch (err: any) {
-      setError(err.message || "Upload failed");
+      setError(err?.message || "Upload failed");
       setUploading(false);
       setProgress(0);
     }
@@ -87,7 +127,6 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Upload Asset</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
@@ -97,10 +136,8 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6">
           {!file ? (
-            /* Drop zone */
             <div
               className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition-colors"
               onClick={() => fileRef.current?.click()}
@@ -121,7 +158,6 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
               />
             </div>
           ) : (
-            /* File selected */
             <div className="space-y-4">
               <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
                 <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center">
@@ -135,7 +171,10 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
                 </div>
                 {!uploading && (
                   <button
-                    onClick={() => { setFile(null); setName(""); }}
+                    onClick={() => {
+                      setFile(null);
+                      setName("");
+                    }}
                     className="text-slate-400 hover:text-red-500"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -145,7 +184,6 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
                 )}
               </div>
 
-              {/* Name input */}
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Display name</label>
                 <input
@@ -157,7 +195,6 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
                 />
               </div>
 
-              {/* Progress bar */}
               {uploading && (
                 <div className="space-y-1">
                   <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -172,14 +209,11 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
                 </div>
               )}
 
-              {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
-              )}
+              {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
             </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
           <button
             onClick={onClose}

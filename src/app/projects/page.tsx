@@ -48,12 +48,9 @@ export default async function ProjectsPage() {
             {!usingDb && <span className="text-xs ml-2 text-amber-500">(demo data)</span>}
           </p>
         </div>
-        <Link
-          href="/projects/new"
-          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors inline-flex items-center"
-        >
+        <button className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
           + New Project
-        </Link>
+        </button>
       </div>
 
       {/* Project Grid */}
