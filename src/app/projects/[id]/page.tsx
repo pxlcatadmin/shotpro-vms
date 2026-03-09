@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import ProjectHeaderActions from "@/components/ProjectHeaderActions";
+import AddTaskButton from "@/components/AddTaskButton";
 
 const statusColor: Record<string, string> = {
   "pre-production": "bg-sky-100 text-sky-700",
@@ -104,14 +106,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             {project.client} &middot; {project.deliverableType} &middot; Due {project.dueDate}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-            Edit Project
-          </button>
-          <button className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
-            Share Portal Link
-          </button>
-        </div>
+        <ProjectHeaderActions project={project} />
       </div>
 
       {/* Phase Timeline */}
@@ -159,7 +154,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-slate-900">Tasks</h2>
-            <button className="text-sm text-brand-600 font-medium hover:text-brand-700">+ Add Task</button>
+            <AddTaskButton projectId={project.id} />
           </div>
           <div className="space-y-2">
             {projectTasks.length > 0 ? (

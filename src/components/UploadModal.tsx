@@ -18,23 +18,27 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB — Supabase free tier limit
+
+  const validateAndSetFile = (f: File) => {
+    if (f.size > MAX_FILE_SIZE) {
+      setError(`File is ${formatSize(f.size)} — exceeds the 50 MB upload limit. Please use a smaller file or compress the video first.`);
+      return;
+    }
+    setFile(f);
+    setName(f.name);
+    setError(null);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setFile(f);
-      setName(f.name);
-      setError(null);
-    }
+    if (f) validateAndSetFile(f);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) {
-      setFile(f);
-      setName(f.name);
-      setError(null);
-    }
+    if (f) validateAndSetFile(f);
   };
 
   const getFileType = (fileName: string): "video" | "image" | "audio" | "document" => {
@@ -148,7 +152,8 @@ export default function UploadModal({ projectId, onClose }: UploadModalProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
               <p className="text-sm font-medium text-slate-700">Drop a file here or click to browse</p>
-              <p className="text-xs text-slate-500 mt-1">Video, image, audio, or document</p>
+              <p className="text-xs text-slate-500 mt-1">Video, image, audio, or document &middot; Max 50 MB</p>
+              {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
               <input
                 ref={fileRef}
                 type="file"

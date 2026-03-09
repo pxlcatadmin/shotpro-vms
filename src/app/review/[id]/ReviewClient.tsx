@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import VideoPlayer from "@/components/VideoPlayer";
 import CommentPanel from "@/components/CommentPanel";
+import ShareLinkButton from "@/components/ShareLinkButton";
 import { useRealtimeComments } from "@/hooks/useRealtimeComments";
 import { createClient } from "@/lib/supabase/client";
 
@@ -100,6 +101,12 @@ export default function ReviewClient({ asset, videoUrl, projectName }: ReviewCli
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500">{unresolvedCount} unresolved</span>
+          <ShareLinkButton
+            assetId={asset.id}
+            projectId={asset.project_id}
+            label="Share"
+            className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+          />
           {asset.status !== "approved" && (
             <div className="flex gap-2">
               <button
