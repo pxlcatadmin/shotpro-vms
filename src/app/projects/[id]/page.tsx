@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ProjectHeaderActions from "@/components/ProjectHeaderActions";
-import AddTaskButton from "@/components/AddTaskButton";
+import TaskListClient from "@/components/TaskListClient";
 
 const statusColor: Record<string, string> = {
   "pre-production": "bg-sky-100 text-sky-700",
@@ -10,13 +10,6 @@ const statusColor: Record<string, string> = {
   "post-production": "bg-violet-100 text-violet-700",
   delivery: "bg-emerald-100 text-emerald-700",
   complete: "bg-slate-100 text-slate-600",
-};
-
-const taskStatusStyle: Record<string, string> = {
-  todo: "bg-slate-100 text-slate-600",
-  "in-progress": "bg-blue-100 text-blue-700",
-  review: "bg-amber-100 text-amber-700",
-  done: "bg-emerald-100 text-emerald-700",
 };
 
 const assetStatusStyle: Record<string, string> = {
@@ -58,11 +51,25 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const projectTasks = (dbTasks || []).map((t: any) => ({
     id: t.id,
     title: t.title,
-    assignee: t.assignee?.full_name || "Unassigned",
+    description: t.description || null,
+    project_id: t.project_id,
+    assignee_id: t.assignee_id,
+    assignee_name: t.assignee?.full_name || "Unassigned",
     status: t.status,
-    dueDate: t.due_date,
+    due_date: t.due_date,
     phase: t.phase,
+    priority: t.priority || "medium",
   }));
+
+  const { data: allProjects } = await supabase
+    .from("projects")
+    .select("id, name")
+    .order("name");
+
+  const { data: allProfiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, role, avatar_url")
+    .order("full_name");
 
   const { data: dbAssets } = await supabase
     .from("assets")
@@ -152,35 +159,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       <div className="grid grid-cols-3 gap-6">
         {/* Tasks */}
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Tasks</h2>
-            <AddTaskButton projectId={project.id} />
-          </div>
-          <div className="space-y-2">
-            {projectTasks.length > 0 ? (
-              projectTasks.map((task: any) => (
-                <div key={task.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors">
-                  <div className={`w-2 h-2 rounded-full ${
-                    task.status === "done" ? "bg-emerald-500" :
-                    task.status === "in-progress" ? "bg-blue-500" :
-                    task.status === "review" ? "bg-amber-500" : "bg-slate-300"
-                  }`} />
-                  <div className="flex-1">
-                    <div className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
-                      {task.title}
-                    </div>
-                    <div className="text-xs text-slate-500">{task.assignee} &middot; {task.phase}</div>
-                  </div>
-                  <span className={`status-badge text-[10px] ${taskStatusStyle[task.status] || ""}`}>
-                    {task.status}
-                  </span>
-                  <span className="text-xs text-slate-400">{task.dueDate}</span>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-400 py-8 text-center">No tasks yet. Click &quot;+ Add Task&quot; to get started.</p>
-            )}
-          </div>
+          <TaskListClient
+            tasks={projectTasks}
+            projectId={project.id}
+            projects={allProjects || []}
+            teamMembers={allProfiles || []}
+          />
         </div>
 
         {/* Team & Info */}

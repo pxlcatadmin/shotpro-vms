@@ -38,12 +38,15 @@ export default async function Dashboard() {
     deliverableType: p.deliverable_type,
   }));
 
+  const today = new Date().toISOString().split("T")[0];
+
   const { data: dbTasks } = await supabase
     .from("tasks")
     .select("*, assignee:profiles!assignee_id(full_name)")
+    .eq("assignee_id", user?.id ?? "")
+    .eq("due_date", today)
     .neq("status", "done")
-    .order("due_date")
-    .limit(5);
+    .order("due_date");
 
   const tasks = (dbTasks || []).map((t: any) => ({
     id: t.id,
@@ -53,6 +56,7 @@ export default async function Dashboard() {
     status: t.status,
     dueDate: t.due_date,
     phase: t.phase,
+    priority: t.priority || "medium",
   }));
 
   const { data: pendingAssets } = await supabase.from("assets").select("id").eq("status", "in-review");
@@ -67,6 +71,7 @@ export default async function Dashboard() {
 
   const statCards = [
     { label: "Active Projects", value: stats.activeProjects, color: "bg-brand-600", href: "/projects" },
+    { label: "Tasks Today", value: tasks.length, color: "bg-violet-500", href: "/schedule" },
     { label: "Pending Reviews", value: stats.pendingReviews, color: "bg-amber-500", href: "/assets" },
   ];
 
@@ -81,7 +86,7 @@ export default async function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-3 gap-5 mb-8">
         {statCards.map((s) => (
           <Link
             key={s.label}
@@ -153,9 +158,14 @@ export default async function Dashboard() {
           )}
         </div>
 
-        {/* Upcoming Tasks */}
+        {/* My Tasks Today */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-900 mb-5">Upcoming Tasks</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-semibold text-slate-900">My Tasks Today</h2>
+            <Link href="/schedule" className="text-sm text-brand-600 hover:text-brand-700 font-medium">
+              View Schedule &rarr;
+            </Link>
+          </div>
           {tasks.length > 0 ? (
             <div className="space-y-3">
               {tasks.map((task: any) => (
@@ -164,7 +174,10 @@ export default async function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-slate-900 truncate">{task.title}</div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      {task.assignee} &middot; {task.dueDate}
+                      {task.phase}
+                      {task.priority === "urgent" && (
+                        <span className="ml-1 text-red-500 font-medium">&middot; Urgent</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -172,7 +185,13 @@ export default async function Dashboard() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-sm text-slate-400">No upcoming tasks</p>
+              <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-slate-400">All clear for today!</p>
+              <Link href="/schedule" className="text-sm text-brand-600 font-medium hover:text-brand-700 mt-1 inline-block">
+                Open Schedule &rarr;
+              </Link>
             </div>
           )}
         </div>
